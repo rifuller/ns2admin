@@ -1,22 +1,49 @@
 function NS2-InstallPrerequisites {
-   param()
-
+   param(
+    [string]$DllDownloadBase = "https://github.com/rifuller/ns2admin/raw/master/dlls/",
+    [string]$TempWorkingDir = "C:/temp/",
+    [string]$WindowsDir = "C:/windows/"
+   )
+    $MicrosoftSigningThumbprint = "A4341B9FD50FB9964283220A36A1EF6F6FAA7840"
+    $MicrosoftSigningThumbprint2 = "711AF71DC4C4952C8ED65BB4BA06826ED3922A32"
+    $NvidiaSigningThumbprint = "C70111241901F5C3BCC2B19BDE110728A505912F"
+    
     Write-Host -ForegroundColor "Green" "Installing Prerequisites..."
-    Invoke-WebRequest -Uri http://us.download.nvidia.com/Windows/9.19.0218/PhysX-9.19.0218-SystemSoftware.exe -UseBasicParsing -OutFile PhysX-9.19.0218-SystemSoftware.exe
-    PhysX-9.19.0218-SystemSoftware.exe
 
-    Invoke-WebRequest -Uri https://aka.ms/vs/16/release/vc_redist.x64.exe -UseBasicParsing -OutFile vc_redist.x64.exe
-    vc_redist.x64.exe
+    DownloadFileAndVerify "http://us.download.nvidia.com/Windows/9.19.0218/PhysX-9.19.0218-SystemSoftware.exe" ($TempWorkingDir + "PhysX-9.19.0218-SystemSoftware.exe") $NvidiaSigningThumbprint
+    # PhysX-9.19.0218-SystemSoftware.exe
 
-    #PS C:\Windows\SysWOW64> cp W:\SysWOW64\msacm32.dll .
-    #PS C:\Windows\SysWOW64> cp W:\SysWOW64\avifil32.dll .
-    #PS C:\Windows\SysWOW64> cp W:\SysWOW64\msvfw32.dll .
-    #PS C:\Windows\SysWOW64> cp W:\SysWOW64\msvfw32.dll .\
-    #PS C:\Windows\SysWOW64> cd ..\system32
-    #PS C:\Windows\system32> cp W:\system32\avifil32.dll .
-    #PS C:\Windows\system32> cp W:\system32\msacm32.dll .
-    #PS C:\Windows\system32> cp W:\system32\msvfw32.dll .
+    DownloadFileAndVerify "https://aka.ms/vs/16/release/vc_redist.x64.exe" ($TempWorkingDir + "vc_redist.x64.exe") $MicrosoftSigningThumbprint2
+    # "vc_redist.x64.exe"
+
+    DownloadFileAndVerify ($DllDownloadBase + "SysWOW64/msacm32.dll") ($WindowsDir + "SysWOW64/msacm32.dll") $MicrosoftSigningThumbprint
+    DownloadFileAndVerify ($DllDownloadBase + "SysWOW64/avifil32.dll") ($WindowsDir + "SysWOW64/avifil32.dll") $MicrosoftSigningThumbprint
+    DownloadFileAndVerify ($DllDownloadBase + "SysWOW64/msvfw32.dll") ($WindowsDir + "SysWOW64/msvfw32.dll") $MicrosoftSigningThumbprint
+    DownloadFileAndVerify ($DllDownloadBase + "System32/msacm32.dll") ($WindowsDir + "System32/msacm32.dll") $MicrosoftSigningThumbprint
+    DownloadFileAndVerify ($DllDownloadBase + "System32/avifil32.dll") ($WindowsDir + "System32/avifil32.dll") $MicrosoftSigningThumbprint
+    DownloadFileAndVerify ($DllDownloadBase + "System32/msvfw32.dll") ($WindowsDir + "System32/msvfw32.dll") $MicrosoftSigningThumbprint
+
     Write-Host -ForegroundColor "Green" "Done."
+}
+
+function DownloadFileAndVerify($url, $outfile, $certthumbprint) {
+    Write-Host "Downloading $url to $outfile"
+
+    Invoke-WebRequest -Uri $url -UseBasicParsing -OutFile $outfile
+
+    if (-not (Test-Path $outfile)) {
+        throw "File didn't download."
+    }
+
+    $sig = Get-AuthenticodeSignature $outfile
+
+    if ($sig.Status -ne "Valid") {
+        throw "File downloaded does not have a valid digital signature: $url"
+    }
+
+    if ($sig.SignerCertificate.Thumbprint -ne $certthumbprint) {
+        throw ("File downloaded was signed but not using the expected certificate. File = " + $outfile +"; Cert=" + $sig.SignerCertificate.Thumbprint  + "; Expected=" + $certthumbprint)
+    }
 }
 
 function NS2-InstallSteamCmd {
