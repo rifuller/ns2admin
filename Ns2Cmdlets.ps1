@@ -28,6 +28,7 @@ function Invoke-InstallNS2Prerequisites {
 
     $WindowsDlls = @("SysWOW64/msacm32.dll", "SysWOW64/avifil32.dll", "SysWOW64/msvfw32.dll", "System32/msacm32.dll", "System32/avifil32.dll", "System32/msvfw32.dll")
     foreach ($file in $WindowsDlls) {
+        # TOOD: Skip if the files already exist in the windows directory. These are really only needed for server core.
         Invoke-DownloadVerifySignature `
         -Url ($DllDownloadBase + $file) `
         -TempDir $TempDir `
@@ -55,8 +56,8 @@ function Invoke-DownloadVerifySignature {
         [string]
         $ExpectedSigningThumbprint,
 
-        [switch]
-        $ExpandArchive = $false,
+        [Switch]
+        $SteamCmd = $false,
 
         [Switch]
         $Execute = $false
@@ -71,7 +72,7 @@ function Invoke-DownloadVerifySignature {
     $TempFile = Join-Path $TempDir $FileName
     $ExecuteFile = $TempFile
 
-    Write-Host "Downloading $Url to $TempFile"
+    Write-Verbose "Downloading $Url to $TempFile"
 
     Invoke-WebRequest -Uri $Url -UseBasicParsing -OutFile $TempFile
 
@@ -81,16 +82,16 @@ function Invoke-DownloadVerifySignature {
 
     # Expand the archive first if necessary. We're assuming it only contains a single file here until 
     # there's a need to implement otherwise. (This is only for steamcmd right now)
-    if ($ExpandArchive) {
-        Expand-Archive -Path $TempFile -DestinationPath .
-        $TempFile = $TempFile.Substring(0, $b.LastIndexOf("."))
+    if ($SteamCmd) {
+        Expand-Archive -Path $TempFile -Destination $TempDir -Force
+        $TempFile = $TempFile.Substring(0, $TempFile.LastIndexOf(".")) + ".exe"
     }
 
     # Validate digital signature for the file
     $sig = Get-AuthenticodeSignature $TempFile
 
     if ($sig.Status -ne "Valid") {
-        throw "File downloaded does not have a valid digital signature: $Url"
+        throw "File downloaded does not have a valid digital signature: $TempFile"
     }
 
     if ($sig.SignerCertificate.Thumbprint -ne $ExpectedSigningThumbprint) {
@@ -120,7 +121,25 @@ function Invoke-InstallSteamCmd {
     param (
         [Parameter(Mandatory=$true)]
         [string]
-        $OutPath,
+        $OutPath
+    )
+
+    $ValveSigningThumbprint = "cb84b870fab19be50acfd1663414488852b8934a"
+    $TargetFile = (Join-Path $OutPath "steamcmd.exe")
+
+    Invoke-DownloadVerifySignature `
+        -Url "http://media.steampowered.com/installer/steamcmd.zip" `
+        -TempDir $TempDir `
+        -ExpectedSigningThumbprint $ValveSigningThumbprint `
+        -OutFile $TargetFile `
+        -SteamCmd
+}
+
+function Invoke-InstallNS2 {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]
+        $SteamPath,
 
         [Parameter(Mandatory=$true)]
         [string]
@@ -128,20 +147,22 @@ function Invoke-InstallSteamCmd {
 
         [Parameter(Mandatory=$true)]
         [securestring]
-        $Password
+        $Password,
+
+        [Parameter(Mandatory=$true)]
+        [string]
+        $NS2Path
     )
 
-    $ValveSigningThumbprint = "cb84b870fab19be50acfd1663414488852b8934a"
-
-    Invoke-DownloadVerifySignature `
-        -Url "http://media.steampowered.com/installer/steamcmd.zip" `
-        -TempDir $TempDir `
-        -ExpectedSigningThumbprint $ValveSigningThumbprint `
-        -OutFile (Join-Path $OutPath "steamcmd.exe")
-        -ExpandArchive
-
     # Generate the NS2 install/update script
-    
+    $SteamCMDPath = (Join-Path $SteamPath "steamcmd.exe")
+    $UpdateNS2ScriptPath = (Join-Path $NS2Path "updatens2.cmd")
+    $PlainTextPassword = ConvertFrom-SecureString -SecureString $Password -AsPlainText
+    $content = "@echo off
+    `"$SteamCMDPath`" +login `"$Username`" `"$PlainTextPassword`" +force_install_dir `"$NS2Path`" +app_update 4940 validate +quit"
+    New-Item -Path $UpdateNS2ScriptPath -Value $content -Force | Out-Null
+
+    Invoke-Expression "& $UpdateNS2ScriptPath"
 }
 
 function NS2-UpdateFirewallRules {
@@ -172,10 +193,21 @@ function NS2-UpdateFirewallRules {
 }
 
 $TempDir = "C:/temp"
+$SteamDir = "C:/steamcmd"
+$NS2Dir = "C:/NS2Server"
+
+Write-Host -NoNewLine "Enter steam password: " 
+$Password = Read-Host -AsSecureString
+
 Write-Host -ForegroundColor "Green" "Installing system pre-requisites... " -NoNewline
-Invoke-InstallNS2Prerequisites -TempDir $TempDir
+#Invoke-InstallNS2Prerequisites -TempDir $TempDir -WindowsDir "C:/temp_windows"
 Write-Host -ForegroundColor "Green" "done."
 
 Write-Host -ForegroundColor "Green" "Installing steamcmd... " -NoNewline
-
+Invoke-InstallSteamCmd -OutPath $SteamDir
 Write-Host -ForegroundColor "Green" "done."
+
+Write-Host -ForegroundColor "Green" "Installing NS2... " -NoNewline
+Invoke-InstallNS2 -SteamPath $SteamDir -Username "seattle_ns2" -Password $Password -NS2Path $NS2Dir
+Write-Host -ForegroundColor "Green" "done."
+
