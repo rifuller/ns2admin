@@ -8,14 +8,12 @@ function Invoke-InstallNS2Prerequisites {
         $TempDir,
 
         [string]
-        $WindowsDir = "C:/windows/"
+        $WindowsDir = "C:/Windows/"
     )
     $MicrosoftSigningThumbprint = "A4341B9FD50FB9964283220A36A1EF6F6FAA7840"
     $MicrosoftSigningThumbprint2 = "711AF71DC4C4952C8ED65BB4BA06826ED3922A32"
     $NvidiaSigningThumbprint = "C70111241901F5C3BCC2B19BDE110728A505912F"
-    
-    Write-Host -ForegroundColor "Green" "Installing Pre-requisites..."
-    
+        
     Invoke-DownloadVerifySignature `
         -Url "http://us.download.nvidia.com/Windows/9.19.0218/PhysX-9.19.0218-SystemSoftware.exe" `
         -TempDir $TempDir `
@@ -36,8 +34,6 @@ function Invoke-InstallNS2Prerequisites {
         -OutFile (Join-Path $WindowsDir $file) `
         -ExpectedSigningThumbprint $MicrosoftSigningThumbprint
     }
-
-    Write-Host -ForegroundColor "Green" "Done."
 }
 
 function Invoke-DownloadVerifySignature {
@@ -59,6 +55,9 @@ function Invoke-DownloadVerifySignature {
         [string]
         $ExpectedSigningThumbprint,
 
+        [switch]
+        $ExpandArchive = $false,
+
         [Switch]
         $Execute = $false
     )
@@ -78,6 +77,13 @@ function Invoke-DownloadVerifySignature {
 
     if (-not (Test-Path $TempFile)) {
         throw "File didn't download."
+    }
+
+    # Expand the archive first if necessary. We're assuming it only contains a single file here until 
+    # there's a need to implement otherwise. (This is only for steamcmd right now)
+    if ($ExpandArchive) {
+        Expand-Archive -Path $TempFile -DestinationPath .
+        $TempFile = $TempFile.Substring(0, $b.LastIndexOf("."))
     }
 
     # Validate digital signature for the file
@@ -109,22 +115,33 @@ function Invoke-DownloadVerifySignature {
     }
 }
 
-function NS2-InstallSteamCmd {
+function Invoke-InstallSteamCmd {
     [CmdletBinding()]
     param (
+        [Parameter(Mandatory=$true)]
+        [string]
+        $OutPath,
+
         [Parameter(Mandatory=$true)]
         [string]
         $Username,
 
         [Parameter(Mandatory=$true)]
-        [string]
-        $Password,
-        $OutPath = "C:\steamcmd"
+        [securestring]
+        $Password
     )
 
-    Invoke-WebRequest -Uri http://media.steampowered.com/installer/steamcmd.zip -UseBasicParsing -OutFile steamcmd.zip
-    Expand-Archive .\steamcmd.zip
-    #mv .\steamcmd\ ..
+    $ValveSigningThumbprint = "cb84b870fab19be50acfd1663414488852b8934a"
+
+    Invoke-DownloadVerifySignature `
+        -Url "http://media.steampowered.com/installer/steamcmd.zip" `
+        -TempDir $TempDir `
+        -ExpectedSigningThumbprint $ValveSigningThumbprint `
+        -OutFile (Join-Path $OutPath "steamcmd.exe")
+        -ExpandArchive
+
+    # Generate the NS2 install/update script
+    
 }
 
 function NS2-UpdateFirewallRules {
@@ -154,5 +171,11 @@ function NS2-UpdateFirewallRules {
     netsh advfirewall firewall add rule name="Open port $Port2 UDP" dir=in action=allow protocol=UDP localport=$Port2
 }
 
+$TempDir = "C:/temp"
+Write-Host -ForegroundColor "Green" "Installing system pre-requisites... " -NoNewline
+Invoke-InstallNS2Prerequisites -TempDir $TempDir
+Write-Host -ForegroundColor "Green" "done."
 
+Write-Host -ForegroundColor "Green" "Installing steamcmd... " -NoNewline
 
+Write-Host -ForegroundColor "Green" "done."
