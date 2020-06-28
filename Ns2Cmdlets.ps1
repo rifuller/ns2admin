@@ -165,27 +165,27 @@ function Invoke-InstallNS2 {
     Invoke-Expression "& $UpdateNS2ScriptPath"
 }
 
-function NS2-UpdateFirewallRules {
+function Set-NS2FirewallRules {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]
         [string] 
-        $NS2Root, 
+        $NS2Path, 
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$false)]
         [Int] 
         $Port = 27015
     )
 
-    $serverexe_path = Join-Path $NS2Root "x64/server.exe"
+    $ServerExePath = Join-Path $NS2Path "x64/server.exe"
 
-    if (-not (Test-Path $serverexe_path)) {
-        throw "Could not find server.exe at path: $serverexe_path"
+    if (-not (Test-Path $ServerExePath)) {
+        throw "Could not find server.exe at path: $ServerExePath"
     }
 
     $Port2 = $Port + 1
 
-    netsh advfirewall firewall add rule name="ns2server" dir=in action=allow program="$serverexe_path" enable=yes
+    netsh advfirewall firewall add rule name="ns2server" dir=in action=allow program="$ServerExePath" enable=yes
     netsh advfirewall firewall add rule name="Open port $Port" dir=in action=allow protocol=TCP localport=$Port
     netsh advfirewall firewall add rule name="Open port $Port UDP" dir=in action=allow protocol=UDP localport=$Port
     netsh advfirewall firewall add rule name="Open port $Port2" dir=in action=allow protocol=TCP localport=$Port2
@@ -196,11 +196,25 @@ $TempDir = "C:/temp"
 $SteamDir = "C:/steamcmd"
 $NS2Dir = "C:/NS2Server"
 
+Write-Host
+Write-Host -ForegroundColor Cyan "NS2 Onebox Script"
+Write-Host -ForegroundColor Cyan "  Maintained by: idk"
+Write-Host -ForegroundColor Cyan "  Source code: https://github.com/rifuller/ns2admin"
+Write-Host
+
+$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw "Script must be run from an elevated command prompt."
+}
+
+Write-Host -NoNewLine "Enter steam username: " 
+$Username = Read-Host
+
 Write-Host -NoNewLine "Enter steam password: " 
 $Password = Read-Host -AsSecureString
 
 Write-Host -ForegroundColor "Green" "Installing system pre-requisites... " -NoNewline
-#Invoke-InstallNS2Prerequisites -TempDir $TempDir -WindowsDir "C:/temp_windows"
+Invoke-InstallNS2Prerequisites -TempDir $TempDir -WindowsDir "C:/temp_windows"
 Write-Host -ForegroundColor "Green" "done."
 
 Write-Host -ForegroundColor "Green" "Installing steamcmd... " -NoNewline
@@ -208,6 +222,14 @@ Invoke-InstallSteamCmd -OutPath $SteamDir
 Write-Host -ForegroundColor "Green" "done."
 
 Write-Host -ForegroundColor "Green" "Installing NS2... " -NoNewline
-Invoke-InstallNS2 -SteamPath $SteamDir -Username "seattle_ns2" -Password $Password -NS2Path $NS2Dir
+Invoke-InstallNS2 -SteamPath $SteamDir -Username $Username -Password $Password -NS2Path $NS2Dir
 Write-Host -ForegroundColor "Green" "done."
 
+Write-Host -ForegroundColor "Green" "Updating system firewall... " -NoNewline
+Set-NS2FirewallRule -NS2Path $NS2Dir
+Write-Host -ForegroundColor "Green" "done."
+
+Write-Host
+Write-Host "You should be good to go. :]"
+Write-Host ">> " + (join-path $NS2Dir "x64/server.exe") 
+Write-Host
