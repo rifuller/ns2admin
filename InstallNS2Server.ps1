@@ -223,23 +223,23 @@ $Username = Read-Host
 Write-Host -NoNewLine "Enter steam password: " 
 $Password = Read-Host -AsSecureString
 
-Write-Host -ForegroundColor "Green" "Installing system pre-requisites... " -NoNewline
-Invoke-InstallNS2Prerequisites -TempDir $TempDir -WindowsDir "C:/temp_windows"
-Write-Host -ForegroundColor "Green" "done."
+Write-Host -ForegroundColor Cyan "Installing system pre-requisites... " -NoNewline
+Invoke-InstallNS2Prerequisites -TempDir $TempDir
+Write-Host -ForegroundColor Cyan "done."
 
-Write-Host -ForegroundColor "Green" "Installing steamcmd... " -NoNewline
+Write-Host -ForegroundColor Cyan "Installing steamcmd... " -NoNewline
 Invoke-InstallSteamCmd -OutPath $SteamDir
-Write-Host -ForegroundColor "Green" "done."
+Write-Host -ForegroundColor Cyan "done."
 
-Write-Host -ForegroundColor "Green" "Installing NS2... " -NoNewline
+Write-Host -ForegroundColor Cyan "Installing NS2... " -NoNewline
 Invoke-InstallNS2 -SteamPath $SteamDir -Username $Username -Password $Password -NS2Path $NS2Dir
-Write-Host -ForegroundColor "Green" "done."
+Write-Host -ForegroundColor Cyan "done."
 
-Write-Host -ForegroundColor "Green" "Updating system firewall... " -NoNewline
-Set-NS2FirewallRule -NS2Path $NS2Dir
-Write-Host -ForegroundColor "Green" "done."
+Write-Host -ForegroundColor Cyan "Updating system firewall... " -NoNewline
+Set-NS2FirewallRules -NS2Path $NS2Dir
+Write-Host -ForegroundColor Cyan "done."
 
 Write-Host
-Write-Host "You should be good to go. :]"
-Write-Host ">> " + (join-path $NS2Dir "x64/server.exe") 
+Write-Host -ForegroundColor Green "You should be good to go. :]"
+Write-Host -ForegroundColor Green ">> " (join-path $NS2Dir "x64/server.exe") 
 Write-Host

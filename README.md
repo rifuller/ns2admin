@@ -1,6 +1,6 @@
 # ns2admin
 
-## Instructions
+## First time installation
 
 ```
 wget https://github.com/PowerShell/PowerShell/releases/download/v7.0.2/PowerShell-7.0.2-win-x64.msi -UseBasicParsing -OutFile PowerShell-7.0.2-win-x64.msi
@@ -21,6 +21,11 @@ Enter steam guard code when prompted.
 Run server 
 
 `C:/NS2Server/x64/server.exe`
+
+## Updating
+You can update NS2 using the script that was created for you.
+
+`C:/NS2server/updatens2.cmd`
 
 ## TODO
 
