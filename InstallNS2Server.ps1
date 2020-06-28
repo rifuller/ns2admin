@@ -1,3 +1,19 @@
+# TIL: Get-Authenticode Signature can return different thumbprints based on environment. 
+# Windows has a catalog of digital signatures for all of its assets and that will take
+# preference over embedded digital signatures. It also means that files don't need embedded
+# sigs either. This poses a problem when we move the DLL dependencies onto a diff machine
+# and the catalog doesn't know them and they don't have embedded sigs - they are effectively
+# unsigned.
+# See: https://github.com/PowerShell/PowerShell/issues/8401#issuecomment-445396418
+
+$TrustedPublisherThumbprints = @(
+    "A4341B9FD50FB9964283220A36A1EF6F6FAA7840", # Microsoft Catalog
+    "FF82BC38E1DA5E596DF374C53E3617F7EDA36B06", # Microsoft Authenticode
+    "711AF71DC4C4952C8ED65BB4BA06826ED3922A32", # Other Microsoft one
+    "C70111241901F5C3BCC2B19BDE110728A505912F", # NVidia
+    "cb84b870fab19be50acfd1663414488852b8934a"  # Valve
+)
+
 function Invoke-InstallNS2Prerequisites {
     [CmdletBinding()]
     param(
@@ -10,20 +26,15 @@ function Invoke-InstallNS2Prerequisites {
         [string]
         $WindowsDir = "C:/Windows/"
     )
-    $MicrosoftSigningThumbprint = "A4341B9FD50FB9964283220A36A1EF6F6FAA7840"
-    $MicrosoftSigningThumbprint2 = "711AF71DC4C4952C8ED65BB4BA06826ED3922A32"
-    $NvidiaSigningThumbprint = "C70111241901F5C3BCC2B19BDE110728A505912F"
         
     Invoke-DownloadVerifySignature `
         -Url "http://us.download.nvidia.com/Windows/9.19.0218/PhysX-9.19.0218-SystemSoftware.exe" `
         -TempDir $TempDir `
-        -ExpectedSigningThumbprint $NvidiaSigningThumbprint `
         -Execute
 
     Invoke-DownloadVerifySignature `
         -Url "https://aka.ms/vs/16/release/vc_redist.x64.exe" `
         -TempDir $TempDir `
-        -ExpectedSigningThumbprint $MicrosoftSigningThumbprint2 `
         -Execute
 
     $WindowsDlls = @("SysWOW64/msacm32.dll", "SysWOW64/avifil32.dll", "SysWOW64/msvfw32.dll", "System32/msacm32.dll", "System32/avifil32.dll", "System32/msvfw32.dll")
@@ -33,7 +44,7 @@ function Invoke-InstallNS2Prerequisites {
         -Url ($DllDownloadBase + $file) `
         -TempDir $TempDir `
         -OutFile (Join-Path $WindowsDir $file) `
-        -ExpectedSigningThumbprint $MicrosoftSigningThumbprint
+        -BypassSignatureValidation
     }
 }
 
@@ -52,15 +63,14 @@ function Invoke-DownloadVerifySignature {
         [string]
         $OutFile,
 
-        [Parameter(Mandatory=$true)]
-        [string]
-        $ExpectedSigningThumbprint,
-
         [Switch]
         $SteamCmd = $false,
 
         [Switch]
-        $Execute = $false
+        $Execute = $false,
+
+        [Switch]
+        $BypassSignatureValidation = $false
     )
 
     # Check the temp dir exists
@@ -88,15 +98,17 @@ function Invoke-DownloadVerifySignature {
     }
 
     # Validate digital signature for the file
-    $sig = Get-AuthenticodeSignature $TempFile
+    if (-not $BypassSignatureValidation) {
+        $sig = Get-AuthenticodeSignature $TempFile
 
-    if ($sig.Status -ne "Valid") {
-        throw "File downloaded does not have a valid digital signature: $TempFile"
-    }
-
-    if ($sig.SignerCertificate.Thumbprint -ne $ExpectedSigningThumbprint) {
-        throw ("File downloaded was signed but not using the expected certificate. File = " + $TempFile +"; Cert=" + $sig.SignerCertificate.Thumbprint  + "; Expected=" + $ExpectedSigningThumbprint)
-    }
+        if ($sig.Status -ne "Valid") {
+            throw "File downloaded does not have a valid digital signature: $TempFile"
+        }
+    
+        if ($TrustedPublisherThumbprints -notcontains $sig.SignerCertificate.Thumbprint) {
+            throw ("File downloaded was signed but not using a trusted certificate. File = " + $TempFile +"; Cert=" + $sig.SignerCertificate)
+        }
+    } 
 
     # Valid digital signature - copy to the target directory
     if ($OutFile -ne "") {
@@ -112,7 +124,7 @@ function Invoke-DownloadVerifySignature {
     # If execute
     if ($Execute) {
         Write-Verbose "Executing $ExecuteFile"
-        Invoke-Expression "& $ExecuteFile /quiet /norestart"
+        Invoke-Expression "& $ExecuteFile /q /quiet /norestart"
     }
 }
 
@@ -124,13 +136,11 @@ function Invoke-InstallSteamCmd {
         $OutPath
     )
 
-    $ValveSigningThumbprint = "cb84b870fab19be50acfd1663414488852b8934a"
     $TargetFile = (Join-Path $OutPath "steamcmd.exe")
 
     Invoke-DownloadVerifySignature `
         -Url "http://media.steampowered.com/installer/steamcmd.zip" `
         -TempDir $TempDir `
-        -ExpectedSigningThumbprint $ValveSigningThumbprint `
         -OutFile $TargetFile `
         -SteamCmd
 }
