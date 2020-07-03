@@ -6,7 +6,7 @@ Set your administrator password. Starting from the command prompt.
 
 ```
 start powershell
-wget https://github.com/PowerShell/PowerShell/releases/download/v7.0.2/PowerShell-7.0.2-win-x64.msi -UseBasicParsing -OutFile PowerShell-7.0.2-win-x64.msi
+iwr -Uri https://raw.githubusercontent.com/rifuller/ns2admin/master/InstallNS2Server.ps1 -UseBasicParsing -OutFile PowerShell-7.0.2-win-x64.msi
 PowerShell-7.0.2-win-x64.msi
 ```
 
